@@ -1,9 +1,26 @@
-适用于 Typecho 的中文网字计划插件，旨在加快自定义中文字体的加载体验
+# SimpleFonts
 
-## 使用
-在release处下载插件，上传插件到 usr/plugins 文件夹，确保文件夹名为ChineseFontsPlan
+适用于 **Typecho** 的外部字体加载插件，  
+旨在以更友好的性能策略，加快自定义字体（尤其是中文字体）的加载体验。
 
-在后台激活插件，填写对应设置项即可
+插件通过加载 **外部分包好的 CDN 字体**，  
+以插件形式注入到站点中，并提供阻塞 / 非阻塞加载方式、  
+自定义 CSS Selector 等配置能力，便于在不同主题下灵活使用。
+
+可与 [PureSuck-theme](https://github.com/MoXiaoXi233/PureSuck-theme) 联动使用。
+
+> ⚠️ 请确保插件文件夹名称为 **`SimpleFonts`**
+
+![SimpleFonts 插件设置示例](https://s2.loli.net/2026/01/01/BRhdvzQAZcamNi3.png)
 
 ## 鸣谢
-感谢 [中文网字计划](https://github.com/KonghaYao/chinese-free-web-font-storage) 做出的努力，我只是做了一个壳方便使用
+
+本插件本身并不提供字体文件，仅作为字体加载与管理的工具壳。
+
+特别感谢以下项目与组织的长期贡献：
+
+- **中文网字计划**  
+  https://github.com/KonghaYao/chinese-free-web-font-storage  
+
+- **释放字体自由（ZeoSeven Fonts）**  
+  https://fonts.zeoseven.com/  

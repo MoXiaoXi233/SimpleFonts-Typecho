@@ -1,84 +1,212 @@
 <?php
+
 /**
- * 中文网字计划插件，旨在加快自定义中文字体的加载体验
+ * 一个简单的字体分包加载插件，用于部署外部字体
  *
- * @package 中文网字计划
- * @version 1.0.0
+ * @package SimpleFonts
+ * @version 1.1.1
  * @author MoXiify
- * @link https://github.com/MoXiaoXi233/ChineseFontsPlan-Typecho
  */
-class ChineseFontsPlan_Plugin implements Typecho_Plugin_Interface
+
+class SimpleFonts_Plugin implements Typecho_Plugin_Interface
 {
+    /** 
+     * PureSuck-theme 官方推荐字体作用范围
+     * 仅在启用联动，且用户未手动接管 selector 时生效
+     */
+    const PURESUCK_SELECTOR =
+    'body,
+.post--cover .post-body .post-wrapper > p:first-child,
+.comment-title,
+h1, h2, h3, h4, h5, h6';
+
+    /**
+     * 内置字体预设
+     * 作为“字体来源”的一种选择，不影响 selector 逻辑
+     */
+    const FONT_PRESETS = [
+        'lxgw-wenkai' => [
+            'label'  => '霞雾文楷',
+            'family' => 'LXGW WenKai',
+            'weight' => 'normal',
+            'cdn' => [
+                'zeoseven' => [
+                    'label' => 'ZeoSeven CDN',
+                    'url'   => 'https://fontsapi.zeoseven.com/292/main/result.css',
+                ],
+                'deno' => [
+                    'label' => 'Deno CDN',
+                    'url'   => 'https://chinese-fonts-cdn.deno.dev/packages/lxgwwenkai/dist/LXGWWenKai-Regular/result.css',
+                ],
+            ],
+        ],
+    ];
+
     public static function activate()
     {
-        Typecho_Plugin::factory('Widget_Archive')->header = array('ChineseFontsPlan_Plugin', 'run');
-        return _t('插件已激活，请在设置中配置中文字体的CDN链接和样式。');
+        Typecho_Plugin::factory('Widget_Archive')->header = ['SimpleFonts_Plugin', 'run'];
+        return _t('SimpleFonts 已激活。');
     }
 
     public static function deactivate()
     {
-        return _t('插件已禁用。');
+        return _t('SimpleFonts 已禁用。');
     }
 
     public static function config(Typecho_Widget_Helper_Form $form)
     {
-        $fontUrl = new Typecho_Widget_Helper_Form_Element_Text(
+        /* 字体来源 */
+        $form->addInput(new Typecho_Widget_Helper_Form_Element_Select(
+            'fontSource',
+            ['preset' => '使用内置预设字体', 'custom' => '使用自定义字体'],
+            'preset',
+            _t('字体来源'),
+            _t(
+                '决定字体从哪里加载。<br>
+                选择「内置预设字体」时，下方所有自定义字体配置将不会生效。'
+            )
+        ));
+
+        /* 预设字体 */
+        $form->addInput(new Typecho_Widget_Helper_Form_Element_Select(
+            'fontPreset',
+            ['lxgw-wenkai' => '霞雾文楷（LXGW WenKai）'],
+            'lxgw-wenkai',
+            _t('字体预设'),
+            _t('仅在「字体来源 = 使用内置预设字体」时生效')
+        ));
+
+        $form->addInput(new Typecho_Widget_Helper_Form_Element_Select(
+            'presetCdn',
+            ['zeoseven' => 'ZeoSeven CDN（推荐）', 'deno' => '中文网字计划 CDN'],
+            'zeoseven',
+            _t('预设 CDN 源'),
+            _t('仅在使用预设字体时生效')
+        ));
+
+        /* 自定义字体 */
+        $form->addInput(new Typecho_Widget_Helper_Form_Element_Text(
             'fontUrl',
-            NULL,
-            NULL,
-            _t('中文字体 CDN 链接'),
-            _t('请输入要导入的中文字体 CDN 链接<br>例：https://chinese-fonts-cdn.deno.dev/packages/lxgwwenkai/dist/LXGWWenKai-Light/result.css<br>
-            字图 CDN 地址：<a href="https://chinese-font.netlify.app/zh-cn/cdn" target="_blank">点我跳转</a>，你也可以尝试：<a href="https://chinese-font.netlify.app/zh-cn/post/deploy_to_cdn" target="_blank">自行部署 CDN</a>')
-        );
-        $form->addInput($fontUrl);
+            null,
+            '',
+            _t('自定义字体 CSS 地址'),
+            _t('仅在「字体来源 = 使用自定义字体」时生效')
+        ));
 
-        $fontFamily = new Typecho_Widget_Helper_Form_Element_Text(
+        $form->addInput(new Typecho_Widget_Helper_Form_Element_Text(
             'fontFamily',
-            NULL,
-            'LXGW WenKai Light',
-            _t('字体名称'),
-            _t('请输入字体名称，例如：LXGW WenKai Light。')
-        );
-        $form->addInput($fontFamily);
+            null,
+            '',
+            _t('自定义 font-family'),
+            _t('例如：Inter、LXGW WenKai')
+        ));
 
-        $fontWeight = new Typecho_Widget_Helper_Form_Element_Text(
+        $form->addInput(new Typecho_Widget_Helper_Form_Element_Text(
             'fontWeight',
-            NULL,
-            '400',
-            _t('字体粗细'),
-            _t('请输入字体粗细，例如：400。')
-        );
-        $form->addInput($fontWeight);
+            null,
+            '',
+            _t('自定义 font-weight（可选）'),
+            _t('可留空，不建议强制设置')
+        ));
 
-        $targetClass = new Typecho_Widget_Helper_Form_Element_Text(
-            'targetClass',
-            NULL,
-            '*',
-            _t('目标类名'),
-            _t('请输入要替换字体的目标类名，例如：body , article。如果要替换全局字体，请输入 *。')
-        );
-        $form->addInput($targetClass);
+        /* 字体作用范围 */
+        $form->addInput(new Typecho_Widget_Helper_Form_Element_Text(
+            'targetSelector',
+            null,
+            'body',
+            _t('字体作用范围（CSS Selector）'),
+            _t(
+                '清空或填写 body 将恢复为默认行为。<br>
+                常见示例：<code>body</code>、<code>body, h1, h2, h3, h4, h5, h6</code>'
+            )
+        ));
+
+        /*  PureSuck 联动 */
+        $form->addInput(new Typecho_Widget_Helper_Form_Element_Radio(
+            'enablePureSuck',
+            ['0' => '关闭', '1' => '启用'],
+            '0',
+            _t('PureSuck-theme 联动'),
+            _t(
+                '启用后，在你未手动接管作用范围的前提下，<br>
+                将自动使用 PureSuck 主题推荐的字体作用范围。'
+            )
+        ));
+
+        /* 加载方式 */
+        $form->addInput(new Typecho_Widget_Helper_Form_Element_Select(
+            'loadMode',
+            ['async' => '非阻塞加载（推荐）', 'blocking' => '阻塞加载'],
+            'async',
+            _t('字体加载方式'),
+            _t('仅影响自定义字体，非阻塞加载可改善首屏性能')
+        ));
     }
 
-    public static function personalConfig(Typecho_Widget_Helper_Form $form)
-    {
-        // 个人用户的配置面板不需要额外配置
-    }
+    public static function personalConfig(Typecho_Widget_Helper_Form $form) {}
 
     public static function run()
     {
-        $options = Typecho_Widget::widget('Widget_Options')->plugin('ChineseFontsPlan');
-        $fontUrl = $options->fontUrl;
-        $fontFamily = $options->fontFamily;
-        $fontWeight = $options->fontWeight;
-        $targetClass = $options->targetClass;
+        $opt = Typecho_Widget::widget('Widget_Options')->plugin('SimpleFonts');
 
-        if (!empty($fontUrl)) {
-            echo '<link rel="stylesheet preconnect" href="' . $fontUrl . '" type="text/css" />' . "\n";
+        $fontSource = (string)$opt->fontSource;
+        $rawSelector = trim((string)$opt->targetSelector);
+        $usePure = ((string)$opt->enablePureSuck === '1');
+        $loadMode = (string)$opt->loadMode;
+
+        /**
+         * 状态机设计：
+         * - 默认 selector = body
+         * - selector 为空 或 等于 body → 视为默认
+         * - selector 非空 且 ≠ body → 视为用户接管
+         * - PureSuck 联动仅在“默认态”生效
+         */
+        if ($rawSelector === '' || $rawSelector === 'body') {
+            if ($usePure) {
+                $selector = self::PURESUCK_SELECTOR;
+            } else {
+                $selector = 'body';
+            }
+        } else {
+            // 用户明确输入，立即接管
+            $selector = preg_replace('/\s+/', ' ', $rawSelector);
         }
 
-        echo '<style type="text/css">';
-        echo $targetClass . ' { font-family: \'' . $fontFamily . '\', sans-serif !important; font-weight: ' . $fontWeight . ' !important; }';
-        echo '</style>' . "\n";
+        /* 字体来源：内置预设 */
+        if ($fontSource === 'preset') {
+            $preset = self::FONT_PRESETS[$opt->fontPreset] ?? null;
+            if (!$preset) return;
+
+            $cdn = $preset['cdn'][$opt->presetCdn] ?? null;
+            if ($cdn) {
+                echo "<link rel=\"stylesheet\" href=\"{$cdn['url']}\">\n";
+            }
+
+            echo "<style>\n";
+            echo "{$selector} { font-family: '{$preset['family']}', sans-serif !important; font-weight: {$preset['weight']}; }\n";
+            echo "</style>\n";
+            return;
+        }
+
+        /* 字体来源：自定义 */
+        $fontUrl = trim((string)$opt->fontUrl);
+        $family  = trim((string)$opt->fontFamily);
+        $weight  = trim((string)$opt->fontWeight);
+
+        if ($family === '') return;
+
+        if ($fontUrl !== '') {
+            if ($loadMode === 'async') {
+                echo '<link rel="stylesheet" href="' . $fontUrl . '" media="print" onload="this.media=\'all\'">' . "\n";
+                echo '<noscript><link rel="stylesheet" href="' . $fontUrl . '"></noscript>' . "\n";
+            } else {
+                echo '<link rel="stylesheet" href="' . $fontUrl . '">' . "\n";
+            }
+        }
+
+        echo "<style>\n";
+        echo "{$selector} { font-family: '{$family}', sans-serif !important;";
+        if ($weight !== '') echo " font-weight: {$weight};";
+        echo " }\n</style>\n";
     }
 }
