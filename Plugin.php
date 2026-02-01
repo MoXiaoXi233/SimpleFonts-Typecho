@@ -4,7 +4,7 @@
  * 一个简单的字体分包加载插件，用于部署外部字体
  *
  * @package SimpleFonts
- * @version 1.1.1
+ * @version 1.1.2
  * @author MoXiify
  */
 
@@ -136,10 +136,13 @@ h1, h2, h3, h4, h5, h6';
         /* 加载方式 */
         $form->addInput(new Typecho_Widget_Helper_Form_Element_Select(
             'loadMode',
-            ['async' => '非阻塞加载（推荐）', 'blocking' => '阻塞加载'],
-            'async',
+            ['preload' => '预加载（推荐）', 'blocking' => '普通加载'],
+            'preload',
             _t('字体加载方式'),
-            _t('仅影响自定义字体，非阻塞加载可改善首屏性能')
+            _t(
+                '预加载：提前下载字体资源，减少渲染等待时间。<br>
+                普通加载：按默认顺序加载，适合对加载顺序有特殊要求的场景。'
+            )
         ));
     }
 
@@ -179,7 +182,14 @@ h1, h2, h3, h4, h5, h6';
 
             $cdn = $preset['cdn'][$opt->presetCdn] ?? null;
             if ($cdn) {
-                echo "<link rel=\"stylesheet\" href=\"{$cdn['url']}\">\n";
+                $url = $cdn['url'];
+                $host = parse_url($url, PHP_URL_HOST);
+
+                if ($loadMode === 'preload') {
+                    echo '<link rel="preconnect" href="https://' . $host . '" crossorigin>' . "\n";
+                    echo '<link rel="preload" href="' . $url . '" as="style">' . "\n";
+                }
+                echo '<link rel="stylesheet" href="' . $url . '">' . "\n";
             }
 
             echo "<style>\n";
@@ -196,12 +206,14 @@ h1, h2, h3, h4, h5, h6';
         if ($family === '') return;
 
         if ($fontUrl !== '') {
-            if ($loadMode === 'async') {
-                echo '<link rel="stylesheet" href="' . $fontUrl . '" media="print" onload="this.media=\'all\'">' . "\n";
-                echo '<noscript><link rel="stylesheet" href="' . $fontUrl . '"></noscript>' . "\n";
-            } else {
-                echo '<link rel="stylesheet" href="' . $fontUrl . '">' . "\n";
+            if ($loadMode === 'preload') {
+                $host = parse_url($fontUrl, PHP_URL_HOST);
+                if ($host) {
+                    echo '<link rel="preconnect" href="https://' . $host . '" crossorigin>' . "\n";
+                }
+                echo '<link rel="preload" href="' . $fontUrl . '" as="style">' . "\n";
             }
+            echo '<link rel="stylesheet" href="' . $fontUrl . '">' . "\n";
         }
 
         echo "<style>\n";
